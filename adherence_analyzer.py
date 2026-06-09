@@ -337,7 +337,8 @@ class AdherenceAnalyzer(tk.Tk):
     def _on_param_change(self, key):
         # Debounce: only re-preview if files loaded
         if self.image_files:
-            self.after_cancel(getattr(self, '_debounce_id', None) or 0)
+            if getattr(self, '_debounce_id', None) is not None:
+                self.after_cancel(self._debounce_id)
             self._debounce_id = self.after(600, self._update_preview)
 
     # ── Preview panel ─────────────────────────────────────────────────────────
