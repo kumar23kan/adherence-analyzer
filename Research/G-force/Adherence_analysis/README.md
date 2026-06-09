@@ -16,6 +16,13 @@ Cells are classified as **adhered** if they remain stationary (within a configur
 3. **Frame-to-frame tracking** — nearest-neighbour linking with a configurable max displacement
 4. **Adherence classification** — spots tracked at the same location for ≥ N consecutive frames = adhered
 
+## How to Run
+
+```bash
+cd /home/kumar-perinbam/Research/G-force/Adherence_analysis
+python3 adherence_analyzer.py
+```
+
 ## Requirements
 
 ```
