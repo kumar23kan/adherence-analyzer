@@ -196,6 +196,14 @@ def run_tracker(files, params, progress_cb=None, cancel_flag=None):
     return results, track_history
 
 
+def _hstack(img_a, img_b):
+    """Horizontally concatenate two PIL images of equal height."""
+    out = Image.new('RGB', (img_a.width + img_b.width, img_a.height))
+    out.paste(img_a, (0, 0))
+    out.paste(img_b, (img_a.width, 0))
+    return out
+
+
 # ── GUI ───────────────────────────────────────────────────────────────────────
 
 class AdherenceAnalyzer(tk.Tk):
@@ -631,150 +639,179 @@ class AdherenceAnalyzer(tk.Tk):
         ).start()
 
     def _export_thread(self, out_dir, params):
+        import gc
+        from PIL import ImageDraw, ImageFont
+
         df         = self._df
         files      = self.image_files
         track_hist = self.track_history
         N          = len(files)
         min_f      = int(params['min_frames'])
+        radius     = int(params['max_sigma'] * 0.85)
+        lw         = max(2, radius // 6)
+
+        # Decode colour strings to RGB tuples for PIL
+        def hex2rgb(h):
+            h = h.lstrip('#')
+            return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+        adh_rgb = hex2rgb(ADHERED_COLOR)
+        flt_rgb = hex2rgb(FLOATING_COLOR)
+
+        # Try to load a small system font for overlay text; fall back to default
+        try:
+            font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 28)
+            font_sm = ImageFont.truetype(
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 22)
+        except Exception:
+            font = font_sm = ImageFont.load_default()
 
         # 1. CSV
-        csv_path = os.path.join(out_dir, 'adherence_counts.csv')
-        df.to_csv(csv_path, index=False)
+        df.to_csv(os.path.join(out_dir, 'adherence_counts.csv'), index=False)
 
-        # 2. Summary time course plot
+        # 2. Summary time course plot (matplotlib — only 2 figures total)
+        self.after(0, self._set_status, 'Exporting time course plot…')
         fig, axes = plt.subplots(2, 1, figsize=(10, 7), facecolor='white')
         for ax in axes:
             ax.set_facecolor('white')
-
         ax = axes[0]
-        ax.plot(df['time_min'], df['adhered'],  color=ADHERED_COLOR, alpha=0.3, lw=1)
+        ax.plot(df['time_min'], df['adhered'],       color=ADHERED_COLOR, alpha=0.3, lw=1)
         ax.plot(df['time_min'], df['adhered_roll5'], color=ADHERED_COLOR,
                 lw=2.5, label='Adhered (5-frame mean)')
-        ax.plot(df['time_min'], df['floating'], color=FLOATING_COLOR, alpha=0.3, lw=1)
+        ax.plot(df['time_min'], df['floating'],       color=FLOATING_COLOR, alpha=0.3, lw=1)
         ax.plot(df['time_min'], df['floating_roll5'], color=FLOATING_COLOR,
                 lw=2.0, ls='--', label='Floating (bright round)')
         ax.set_ylabel('Cell count', fontsize=11)
         ax.set_title('Adherence Time Course', fontsize=13)
-        ax.legend(fontsize=10)
-        ax.grid(True, alpha=0.3)
-        ax.set_ylim(bottom=0)
-
+        ax.legend(fontsize=10); ax.grid(True, alpha=0.3); ax.set_ylim(bottom=0)
         ax2 = axes[1]
         ax2.fill_between(df['time_min'], 0, df['adhered_roll5'],
                          alpha=0.55, color=ADHERED_COLOR, label='Adhered')
         ax2.fill_between(df['time_min'], df['adhered_roll5'],
                          df['adhered_roll5'] + df['floating_roll5'],
                          alpha=0.40, color=FLOATING_COLOR, label='Floating')
-        ax2.set_xlabel('Time (min)', fontsize=11)
-        ax2.set_ylabel('Cell count', fontsize=11)
+        ax2.set_xlabel('Time (min)', fontsize=11); ax2.set_ylabel('Cell count', fontsize=11)
         ax2.set_title('Stacked: Adhered vs Floating', fontsize=12)
-        ax2.legend(fontsize=10)
-        ax2.grid(True, alpha=0.3)
-        ax2.set_ylim(bottom=0)
-
+        ax2.legend(fontsize=10); ax2.grid(True, alpha=0.3); ax2.set_ylim(bottom=0)
         fig.tight_layout()
         fig.savefig(os.path.join(out_dir, 'timecourse_plot.tiff'), dpi=600)
-        plt.close(fig)
+        plt.close(fig); plt.close('all'); gc.collect()
 
-        # 3. Contact sheet — key frames (0%, 20%, 40%, 60%, 80%, 100%)
+        # 3. Contact sheet — 5 key frames, drawn with PIL (memory-safe)
+        self.after(0, self._set_status, 'Exporting contact sheet…')
         key_indices = [int(x * (N - 1) / 4) for x in range(5)]
-        fig2, axes2 = plt.subplots(2, 5, figsize=(22, 9), facecolor='#111111')
-        for col, fi in enumerate(key_indices):
-            fpath  = files[fi]
-            t_min  = fi * 60.0 / max(N - 1, 1)
-            arr, _ = background_correct(fpath, params['bg_sigma'])
-            vmin   = np.percentile(arr, 1)
-            vmax   = np.percentile(arr, 99)
+        contact_imgs = []
+        for fi in key_indices:
+            fpath = files[fi]
+            t_min = fi * 60.0 / max(N - 1, 1)
+            raw   = np.array(Image.open(fpath))
+            lo, hi = np.percentile(raw, 1), np.percentile(raw, 99)
+            norm  = np.clip((raw.astype(np.float32) - lo) / max(hi - lo, 1) * 255,
+                            0, 255).astype(np.uint8)
 
-            for row in range(2):
-                ax_k = axes2[row, col]
-                ax_k.imshow(arr, cmap='gray', vmin=vmin, vmax=vmax)
-                ax_k.axis('off')
-                if row == 0:
-                    ax_k.set_title(f'Frame {fi+1}\nt = {t_min:.1f} min',
-                                   color='white', fontsize=9)
-                else:
-                    if fi < len(track_hist):
-                        snap = track_hist[fi]
-                        for r, c, consec, _ in snap:
-                            color  = ADHERED_COLOR if consec >= min_f else FLOATING_COLOR
-                            radius = params['max_sigma'] * 0.85
-                            ax_k.add_patch(plt.Circle((c, r), radius,
-                                                       color=color, fill=False,
-                                                       lw=1.0, alpha=0.85))
-                        n_adh  = sum(1 for _, _, cs, _ in snap if cs >= min_f)
-                        n_flt  = df[df['frame'] == fi + 1]['floating'].values
-                        n_flt  = int(n_flt[0]) if len(n_flt) else 0
-                        ax_k.text(10, 30,
-                                  f'Adhered: {n_adh}\nFloating: {n_flt}',
-                                  color='white', fontsize=8,
-                                  bbox=dict(facecolor='#000000', alpha=0.55,
-                                            edgecolor='none', pad=3))
+            raw_pil = Image.fromarray(norm).convert('RGB')
+            det_pil = raw_pil.copy()
+            draw    = ImageDraw.Draw(det_pil)
 
-        axes2[0, 0].set_ylabel('Raw', color='white', fontsize=10)
-        axes2[1, 0].set_ylabel('Detected', color='white', fontsize=10)
-        fig2.patch.set_facecolor('#111111')
-        fig2.suptitle('Key Frames — Adherence Progression', color='white',
-                      fontsize=13, y=0.98)
-        fig2.tight_layout(rect=[0, 0, 1, 0.96])
-        fig2.savefig(os.path.join(out_dir, 'contact_sheet.tiff'),
-                     dpi=600, facecolor='#111111')
-        plt.close(fig2)
+            n_adh = 0
+            if fi < len(track_hist):
+                for r, c, consec, _ in track_hist[fi]:
+                    is_adh = consec >= min_f
+                    col_px = adh_rgb if is_adh else flt_rgb
+                    x0, y0 = int(c) - radius, int(r) - radius
+                    x1, y1 = int(c) + radius, int(r) + radius
+                    draw.ellipse([x0, y0, x1, y1], outline=col_px, width=lw)
+                    if is_adh:
+                        n_adh += 1
+                n_flt = df[df['frame'] == fi + 1]['floating'].values
+                n_flt = int(n_flt[0]) if len(n_flt) else 0
+                draw.text((10, 10),
+                          f'Adhered: {n_adh}  Floating: {n_flt}',
+                          fill=(255, 255, 255), font=font_sm)
 
-        # 4. Per-frame overlay images (every frame)
+            # Stack raw on top of detected, add frame label
+            gap    = Image.new('RGB', (raw_pil.width, 6), (17, 17, 27))
+            label  = Image.new('RGB', (raw_pil.width, 50), (17, 17, 27))
+            ld     = ImageDraw.Draw(label)
+            ld.text((4, 8), f'Frame {fi+1}  t={t_min:.1f} min',
+                    fill=(180, 180, 220), font=font_sm)
+            col_img = Image.new('RGB',
+                                (raw_pil.width, label.height + raw_pil.height + gap.height + det_pil.height))
+            col_img.paste(label,   (0, 0))
+            col_img.paste(raw_pil, (0, label.height))
+            col_img.paste(gap,     (0, label.height + raw_pil.height))
+            col_img.paste(det_pil, (0, label.height + raw_pil.height + gap.height))
+            contact_imgs.append(col_img)
+            del raw_pil, det_pil, draw, label, ld, raw, norm
+            gc.collect()
+
+        sep   = Image.new('RGB', (10, contact_imgs[0].height), (17, 17, 27))
+        sheet = contact_imgs[0]
+        for ci in contact_imgs[1:]:
+            sheet = _hstack(sheet, sep)
+            sheet = _hstack(sheet, ci)
+        sheet.save(os.path.join(out_dir, 'contact_sheet.tiff'), dpi=(600, 600))
+        del sheet, contact_imgs, sep; gc.collect()
+
+        # 4. Per-frame overlays — PIL only, one image at a time (no matplotlib)
         overlays_dir = os.path.join(out_dir, 'frame_overlays')
         os.makedirs(overlays_dir, exist_ok=True)
 
         for fi, fpath in enumerate(files):
-            t_min  = fi * 60.0 / max(N - 1, 1)
-            arr, _ = background_correct(fpath, params['bg_sigma'])
-            vmin   = np.percentile(arr, 1)
-            vmax   = np.percentile(arr, 99)
+            t_min = fi * 60.0 / max(N - 1, 1)
+            raw   = np.array(Image.open(fpath))
+            lo, hi = np.percentile(raw, 1), np.percentile(raw, 99)
+            norm  = np.clip((raw.astype(np.float32) - lo) / max(hi - lo, 1) * 255,
+                            0, 255).astype(np.uint8)
+            img   = Image.fromarray(norm).convert('RGB')
+            draw  = ImageDraw.Draw(img)
 
-            fig3, ax3 = plt.subplots(figsize=(8, 6.7), facecolor='black')
-            ax3.imshow(arr, cmap='gray', vmin=vmin, vmax=vmax)
-            ax3.axis('off')
-
+            n_adh = 0
             if fi < len(track_hist):
-                snap  = track_hist[fi]
-                n_adh = 0
-                for r, c, consec, _ in snap:
+                for r, c, consec, _ in track_hist[fi]:
                     is_adh = consec >= min_f
-                    color  = ADHERED_COLOR if is_adh else FLOATING_COLOR
-                    radius = params['max_sigma'] * 0.85
-                    ax3.add_patch(plt.Circle((c, r), radius, color=color,
-                                             fill=False, lw=1.2, alpha=0.9))
+                    col_px = adh_rgb if is_adh else flt_rgb
+                    x0, y0 = int(c) - radius, int(r) - radius
+                    x1, y1 = int(c) + radius, int(r) + radius
+                    draw.ellipse([x0, y0, x1, y1], outline=col_px, width=lw)
                     if is_adh:
                         n_adh += 1
                 n_flt = df[df['frame'] == fi + 1]['floating'].values
                 n_flt = int(n_flt[0]) if len(n_flt) else 0
             else:
-                n_adh = n_flt = 0
+                n_flt = 0
 
-            ax3.set_title(f'Frame {fi+1:03d}  |  t = {t_min:.1f} min  |  '
-                          f'Adhered: {n_adh}   Floating: {n_flt}',
-                          color='white', fontsize=9, pad=4)
+            # Header bar with frame info
+            bar  = Image.new('RGB', (img.width, 55), (17, 17, 27))
+            bd   = ImageDraw.Draw(bar)
+            bd.text((8, 6),
+                    f'Frame {fi+1:03d}  |  t = {t_min:.1f} min  |  '
+                    f'Adhered: {n_adh}   Floating: {n_flt}',
+                    fill=(200, 200, 230), font=font)
+            # Legend bar
+            leg  = Image.new('RGB', (img.width, 40), (17, 17, 27))
+            ld2  = ImageDraw.Draw(leg)
+            ld2.rectangle([8, 12, 28, 32],  fill=adh_rgb)
+            ld2.text((34, 12), f'Adhered (≥{min_f} frames)',
+                     fill=(200, 200, 230), font=font_sm)
+            ld2.rectangle([260, 12, 280, 32], fill=flt_rgb)
+            ld2.text((286, 12), 'Floating', fill=(200, 200, 230), font=font_sm)
 
-            adh_patch = mpatches.Patch(color=ADHERED_COLOR,
-                                       label=f'Adhered (≥{min_f} frames): {n_adh}')
-            flt_patch = mpatches.Patch(color=FLOATING_COLOR,
-                                       label=f'Floating: {n_flt}')
-            ax3.legend(handles=[adh_patch, flt_patch], loc='lower right',
-                       fontsize=7, facecolor='#111111', labelcolor='white',
-                       edgecolor='none')
+            out_img = Image.new('RGB', (img.width, bar.height + img.height + leg.height))
+            out_img.paste(bar, (0, 0))
+            out_img.paste(img, (0, bar.height))
+            out_img.paste(leg, (0, bar.height + img.height))
+            out_img.save(os.path.join(overlays_dir, f'frame_{fi+1:03d}.tiff'),
+                         dpi=(600, 600))
 
-            fig3.tight_layout(pad=0.3)
-            fig3.savefig(os.path.join(overlays_dir, f'frame_{fi+1:03d}.tiff'),
-                         dpi=600, facecolor='black')
-            plt.close(fig3)
+            del img, draw, bar, bd, leg, ld2, out_img, raw, norm
+            gc.collect()
 
             pct = (fi + 1) / N * 100
             self.after(0, self.progress_var.set, pct)
-            self.after(0, self._set_status,
-                       f'Exporting frame overlays {fi+1}/{N}…')
+            self.after(0, self._set_status, f'Exporting frame overlays {fi+1}/{N}…')
 
-        self.after(0, self._set_status,
-                   f'Export complete → {out_dir}')
+        self.after(0, self._set_status, f'Export complete → {out_dir}')
         self.after(0, self.progress_var.set, 100)
         self.after(0, messagebox.showinfo, 'Export done',
                    f'Report saved to:\n{out_dir}\n\n'
