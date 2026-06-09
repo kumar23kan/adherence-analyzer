@@ -1,8 +1,5 @@
-# Ignore everything except Research/G-force/Adherence_analysis
+# Ignore everything except the adherence analyzer files at repo root
 /*
 !.gitignore
-!/Research
-/Research/*
-!/Research/G-force
-/Research/G-force/*
-!/Research/G-force/Adherence_analysis
+!adherence_analyzer.py
+!README.md
