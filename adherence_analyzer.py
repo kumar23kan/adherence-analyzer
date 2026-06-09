@@ -672,7 +672,7 @@ class AdherenceAnalyzer(tk.Tk):
         ax2.set_ylim(bottom=0)
 
         fig.tight_layout()
-        fig.savefig(os.path.join(out_dir, 'timecourse_plot.png'), dpi=150)
+        fig.savefig(os.path.join(out_dir, 'timecourse_plot.tiff'), dpi=600)
         plt.close(fig)
 
         # 3. Contact sheet — key frames (0%, 20%, 40%, 60%, 80%, 100%)
@@ -716,8 +716,8 @@ class AdherenceAnalyzer(tk.Tk):
         fig2.suptitle('Key Frames — Adherence Progression', color='white',
                       fontsize=13, y=0.98)
         fig2.tight_layout(rect=[0, 0, 1, 0.96])
-        fig2.savefig(os.path.join(out_dir, 'contact_sheet.png'),
-                     dpi=130, facecolor='#111111')
+        fig2.savefig(os.path.join(out_dir, 'contact_sheet.tiff'),
+                     dpi=600, facecolor='#111111')
         plt.close(fig2)
 
         # 4. Per-frame overlay images (every frame)
@@ -763,8 +763,8 @@ class AdherenceAnalyzer(tk.Tk):
                        edgecolor='none')
 
             fig3.tight_layout(pad=0.3)
-            fig3.savefig(os.path.join(overlays_dir, f'frame_{fi+1:03d}.png'),
-                         dpi=100, facecolor='black')
+            fig3.savefig(os.path.join(overlays_dir, f'frame_{fi+1:03d}.tiff'),
+                         dpi=600, facecolor='black')
             plt.close(fig3)
 
             pct = (fi + 1) / N * 100
@@ -778,8 +778,8 @@ class AdherenceAnalyzer(tk.Tk):
         self.after(0, messagebox.showinfo, 'Export done',
                    f'Report saved to:\n{out_dir}\n\n'
                    f'  adherence_counts.csv\n'
-                   f'  timecourse_plot.png\n'
-                   f'  contact_sheet.png\n'
+                   f'  timecourse_plot.tiff\n'
+                   f'  contact_sheet.tiff\n'
                    f'  frame_overlays/  ({N} images)')
 
     # ── Helpers ───────────────────────────────────────────────────────────────
