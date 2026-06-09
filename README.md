@@ -19,7 +19,7 @@ Cells are classified as **adhered** if they remain stationary (within a configur
 ## How to Run
 
 ```bash
-cd /home/kumar-perinbam/Research/G-force/Adherence_analysis
+cd /path/to/adherence_analyzer
 python3 adherence_analyzer.py
 ```
 
