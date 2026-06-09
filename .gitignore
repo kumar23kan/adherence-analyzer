@@ -1,0 +1,8 @@
+# Ignore everything except Research/G-force/Adherence_analysis
+/*
+!.gitignore
+!/Research
+/Research/*
+!/Research/G-force
+/Research/G-force/*
+!/Research/G-force/Adherence_analysis
