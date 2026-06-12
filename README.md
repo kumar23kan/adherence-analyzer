@@ -16,37 +16,32 @@ Cells are classified as **adhered** if they remain stationary (within a configur
 3. **Frame-to-frame tracking** — nearest-neighbour linking with a configurable max displacement
 4. **Adherence classification** — spots tracked at the same location for ≥ N consecutive frames = adhered
 
-## How to Run
+## Installation
+
+**Python 3.9 or later is required.** `tkinter` is included with standard Python installs.
+
+### Windows
+
+```bat
+pip install -r requirements.txt
+python adherence_analyzer.py
+```
+
+### macOS / Linux
 
 ```bash
-cd /path/to/adherence_analyzer
+pip install -r requirements.txt
 python3 adherence_analyzer.py
 ```
 
-## Requirements
-
-```
-Python >= 3.9
-numpy
-Pillow
-scikit-image
-scipy
-pandas
-matplotlib
-tkinter  (standard library)
-```
-
-Install dependencies:
-
-```bash
-pip install numpy Pillow scikit-image scipy pandas matplotlib
-```
-
-## Usage
-
-```bash
-python3 adherence_analyzer.py
-```
+> If `pip install` fails on Windows, try running the command prompt as Administrator,
+> or use a virtual environment:
+> ```bat
+> python -m venv venv
+> venv\Scripts\activate
+> pip install -r requirements.txt
+> python adherence_analyzer.py
+> ```
 
 1. Click **Load Folder** and select the directory containing TIFF frames (named with a trailing number, e.g. `image_001.tiff`)
 2. Adjust parameters in the left panel (preview updates automatically)

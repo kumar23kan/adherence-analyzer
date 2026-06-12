@@ -1,0 +1,6 @@
+numpy
+Pillow
+scikit-image
+scipy
+pandas
+matplotlib
