@@ -11,6 +11,21 @@ Usage:
     python3 adherence_analyzer.py
 """
 
+import sys
+import importlib
+
+_REQUIRED = ['numpy', 'PIL', 'skimage', 'scipy', 'pandas', 'matplotlib']
+_MISSING  = [m for m in _REQUIRED if importlib.util.find_spec(m) is None]
+if _MISSING:
+    print(
+        '\nMissing dependencies: ' + ', '.join(_MISSING) + '\n'
+        'Run this first:\n'
+        '    pip install -r requirements.txt\n'
+        '\nThen re-run:\n'
+        '    python adherence_analyzer.py\n'
+    )
+    sys.exit(1)
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
