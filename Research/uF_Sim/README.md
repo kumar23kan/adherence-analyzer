@@ -41,6 +41,28 @@ Dependencies are installed automatically by Cell 2 of the notebook:
 
 ---
 
+## Meshing Strategy
+
+The notebook uses a two-layer mesh strategy inside `build_mesh()` (Cell 6):
+
+**Bulk mesh**
+- Size is clamped to 25% of the channel's shortest cross-section dimension, so thin channels always get enough cells regardless of the overall bounding box size.
+
+**Boundary layer (auto-calculated)**
+- Applied automatically to all wall surfaces.
+- First-layer thickness = a fraction of the channel depth, scaled by resolution:
+
+| Resolution | First-layer fraction | Layers | Growth ratio |
+|---|---|---|---|
+| Coarse | 10% of depth | 5 | 1.3× |
+| Medium | 8% of depth | 5 | 1.3× |
+| Fine | 6% of depth | 5 | 1.3× |
+| Very Fine | 5% of depth | 5 | 1.3× |
+
+This ensures the near-wall velocity gradient is resolved accurately for wall shear stress, pressure drop, and species concentration at walls — all critical in microfluidic channels.
+
+---
+
 ## Step-by-step Instructions
 
 ### 1. Export STL from Fusion 360
@@ -93,7 +115,7 @@ The exported `.json` bundles all settings and is passed to Colab.
 | **Cell 3** | Imports | Confirm versions print without error |
 | **Cell 4** | Mount Drive + upload job | Upload your `.json` when prompted |
 | **Cell 5** | Load config + upload STL | Upload your `.stl` when prompted |
-| **Cell 6** | Generate mesh | Gmsh builds tetrahedral mesh from STL |
+| **Cell 6** | Generate mesh | Gmsh builds tetrahedral mesh + boundary layer from STL |
 | **Cell 7-10** | Solver definitions | Functions are defined, not run yet |
 | **Cell 11** | Run simulation | Automatically calls the right solver |
 | **Cell 12** | Download results | Downloads a `.zip` of all output files |
@@ -124,7 +146,7 @@ The exported `.json` bundles all settings and is passed to Colab.
 
 ---
 
-## Boundary Conditions
+## Boundary Conditions and Mesh
 
 The mesh builder auto-detects boundaries from the STL bounding box:
 

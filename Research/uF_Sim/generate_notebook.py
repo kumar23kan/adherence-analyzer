@@ -160,8 +160,14 @@ print(f"Output directory: {OUTPUT_DIR}")
 
 # ── Cell 6: Meshing ────────────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 5: Generate 3D tetrahedral mesh from STL ────────────────────────────
+"""# ── Step 5: Generate 3D tetrahedral mesh with boundary layer from STL ────────
 MESH_SIZES = {"Coarse": 0.5, "Medium": 0.2, "Fine": 0.08, "Very Fine": 0.04}
+
+# Boundary layer: first-cell thickness as fraction of bulk mesh size.
+# Keeps at least 5 prismatic layers across the wall-normal gradient region.
+BL_FRACTIONS  = {"Coarse": 0.10, "Medium": 0.08, "Fine": 0.06, "Very Fine": 0.05}
+BL_LAYERS     = 5      # number of prism layers
+BL_RATIO      = 1.3    # growth ratio between successive layers
 
 INLET_ID = 1; OUTLET_ID = 2; WALL_ID = 3; FLUID_ID = 4
 
@@ -187,13 +193,18 @@ def build_mesh(stl_path, resolution, out_dir):
     gmsh.model.geo.synchronize()
 
     # Classify inlet/outlet/wall by bounding box along the longest axis
-    bb = gmsh.model.getBoundingBox(-1, -1)          # overall bbox
+    bb = gmsh.model.getBoundingBox(-1, -1)
     x0, y0, z0, x1, y1, z1 = bb
     extents = {'x': (x0, x1), 'y': (y0, y1), 'z': (z0, z1)}
     flow_ax = max(extents, key=lambda k: extents[k][1] - extents[k][0])
     lo, hi  = extents[flow_ax]
     ax_idx  = {'x': 0, 'y': 1, 'z': 2}[flow_ax]
     tol     = (hi - lo) * 0.06
+
+    # Find the shortest cross-section dimension to anchor BL thickness
+    cross_dims = [extents[ax][1] - extents[ax][0]
+                  for ax in extents if ax != flow_ax]
+    min_cross  = min(cross_dims)   # e.g. channel depth
 
     inlet_tags, outlet_tags, wall_tags = [], [], []
     for dim, tag in surfaces:
@@ -215,14 +226,37 @@ def build_mesh(stl_path, resolution, out_dir):
     gmsh.model.addPhysicalGroup(2, outlet_tags, OUTLET_ID); gmsh.model.setPhysicalName(2, OUTLET_ID, "outlet")
     if wall_tags:
         gmsh.model.addPhysicalGroup(2, wall_tags, WALL_ID); gmsh.model.setPhysicalName(2, WALL_ID,   "walls")
-    gmsh.model.addPhysicalGroup(3, [vol],       FLUID_ID);  gmsh.model.setPhysicalName(3, FLUID_ID,  "fluid")
+    gmsh.model.addPhysicalGroup(3, [vol],        FLUID_ID); gmsh.model.setPhysicalName(3, FLUID_ID,  "fluid")
 
-    size = MESH_SIZES.get(resolution, 0.2)
-    gmsh.option.setNumber("Mesh.MeshSizeMax",   size)
-    gmsh.option.setNumber("Mesh.MeshSizeMin",   size * 0.1)
-    gmsh.option.setNumber("Mesh.Algorithm3D",   1)    # Delaunay
+    size    = MESH_SIZES.get(resolution, 0.2)
+    bl_frac = BL_FRACTIONS.get(resolution, 0.08)
 
-    print(f"  Meshing ({resolution}, max_size={size})...")
+    # Scale mesh size to the cross-section so thin channels get enough cells
+    effective_size = min(size, min_cross * 0.25)
+    bl_thickness   = min_cross * bl_frac   # first-layer height auto-calculated
+
+    gmsh.option.setNumber("Mesh.MeshSizeMax", effective_size)
+    gmsh.option.setNumber("Mesh.MeshSizeMin", effective_size * 0.05)
+    gmsh.option.setNumber("Mesh.Algorithm3D", 1)    # Delaunay
+
+    # ── Boundary layer on walls ────────────────────────────────────────────────
+    if wall_tags:
+        field = gmsh.model.mesh.field
+        bl_id = field.add("BoundaryLayer")
+        field.setNumbers(bl_id, "FacesList",  wall_tags)
+        field.setNumber( bl_id, "Size",       bl_thickness)
+        field.setNumber( bl_id, "Ratio",      BL_RATIO)
+        field.setNumber( bl_id, "NbLayers",   BL_LAYERS)
+        field.setNumber( bl_id, "Quads",      0)     # tetrahedra, not quads
+        field.setAsBoundaryLayer(bl_id)
+        total_bl = bl_thickness * sum(BL_RATIO**i for i in range(BL_LAYERS))
+        print(f"  Boundary layer: {BL_LAYERS} layers, "
+              f"first={bl_thickness:.4f}, total={total_bl:.4f} "
+              f"({total_bl/min_cross*100:.1f}% of channel depth)")
+
+    print(f"  Bulk mesh size: {effective_size:.4f}  "
+          f"(channel depth: {min_cross:.4f})")
+    print(f"  Meshing ({resolution})...")
     gmsh.model.mesh.generate(3)
     gmsh.model.mesh.optimize("Netgen")
 
