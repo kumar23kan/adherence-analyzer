@@ -69,6 +69,15 @@ print("Done. Proceed to the next cell.")
 # ── Cell 3: Imports ────────────────────────────────────────────────────────────
 cells.append(code(
 """# @title Cell 2 — Imports
+# Ensure non-FEniCSx packages are present even after a runtime restart
+import importlib, subprocess, sys
+
+_pkgs = {"gmsh": "gmsh", "meshio": "meshio", "h5py": "h5py", "scipy": "scipy"}
+for _pip, _mod in _pkgs.items():
+    if importlib.util.find_spec(_mod) is None:
+        print(f"Installing {_pip}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", _pip])
+
 import json, os, glob, shutil, datetime, zipfile
 import numpy as np
 import gmsh
