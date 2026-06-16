@@ -42,7 +42,7 @@ Run computational fluid dynamics on microfluidic geometries exported from Fusion
 
 # ── Cell 2: Install ────────────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 1: Install FEniCSx (run once per Colab session — ~5-10 min) ─────────
+"""# @title Cell 1 — Install FEniCSx (run once per session, ~5-10 min)
 import subprocess, sys
 
 def _run(cmd):
@@ -68,7 +68,7 @@ print("Done. Proceed to the next cell.")
 
 # ── Cell 3: Imports ────────────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 2: Imports ───────────────────────────────────────────────────────────
+"""# @title Cell 2 — Imports
 import json, os, glob, shutil, datetime, zipfile
 import numpy as np
 import gmsh
@@ -94,7 +94,7 @@ print(f"MPI size {MPI.COMM_WORLD.size}")
 
 # ── Cell 4: Mount Drive + upload job ─────────────────────────────────────────
 cells.append(code(
-"""# ── Step 3: Mount Google Drive and upload job file ───────────────────────────
+"""# @title Cell 3 — Mount Google Drive & Upload Job File
 from google.colab import drive, files as colab_files
 
 drive.mount('/content/drive', force_remount=False)
@@ -122,7 +122,7 @@ else:
 
 # ── Cell 5: Load config ────────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 4: Display job configuration and upload STL ─────────────────────────
+"""# @title Cell 4 — Load Job Config & Upload STL
 with open(job_path) as f:
     job = json.load(f)
 
@@ -160,7 +160,7 @@ print(f"Output directory: {OUTPUT_DIR}")
 
 # ── Cell 6: Meshing ────────────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 5: Generate 3D tetrahedral mesh with boundary layer from STL ────────
+"""# @title Cell 5 — Generate Mesh with Boundary Layer
 MESH_SIZES = {"Coarse": 0.5, "Medium": 0.2, "Fine": 0.08, "Very Fine": 0.04}
 
 # Boundary layer: first-cell thickness as fraction of bulk mesh size.
@@ -283,7 +283,7 @@ print(f"Mesh: {n_cells} cells, {n_verts} vertices")
 
 # ── Cell 7: Stokes solver ──────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Solver A: Stokes Flow ────────────────────────────────────────────────────
+"""# @title Cell 6 — Solver A: Stokes Flow (used by all simulation types)
 def solve_stokes(domain, facet_tags, bc_ids, params, out_dir):
     mu_val      = float(params.get("Fluid Viscosity (Pa·s)",  0.001))
     inlet_vel   = float(params.get("Inlet Velocity (m/s)",     0.001))
@@ -353,7 +353,7 @@ def solve_stokes(domain, facet_tags, bc_ids, params, out_dir):
 
 # ── Cell 8: Mixing solver ──────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Solver B: Flow Mixing (Advection-Diffusion with SUPG) ────────────────────
+"""# @title Cell 7 — Solver B: Flow Mixing (Advection-Diffusion, SUPG)
 def solve_mixing(domain, facet_tags, bc_ids, params, out_dir, u_h):
     D_val  = float(params.get("Diffusion Coefficient (m²/s)",    1e-9))
     c1_val = float(params.get("Inlet 1 Concentration (mol/m³)",  1.0))
@@ -405,7 +405,7 @@ def solve_mixing(domain, facet_tags, bc_ids, params, out_dir, u_h):
 
 # ── Cell 9: Particle tracking ─────────────────────────────────────────────────
 cells.append(code(
-"""# ── Solver C: Lagrangian Particle Tracking ───────────────────────────────────
+"""# @title Cell 8 — Solver C: Particle Tracking (Lagrangian, RK45)
 def solve_particle_tracking(domain, facet_tags, bc_ids, params, out_dir, u_h):
     n_part  = int(float(params.get("Number of Particles", 100)))
     t_end   = 1.0
@@ -461,7 +461,7 @@ def solve_particle_tracking(domain, facet_tags, bc_ids, params, out_dir, u_h):
 
 # ── Cell 10: Heat transfer ────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Solver D: Conjugate Heat Transfer ────────────────────────────────────────
+"""# @title Cell 9 — Solver D: Heat Transfer (Energy Equation)
 def solve_heat_transfer(domain, facet_tags, bc_ids, params, out_dir, u_h):
     k_val   = float(params.get("Thermal Conductivity (W/m·K)",   0.6))
     rho_val = float(params.get("Fluid Density (kg/m³)",          1000.0))
@@ -502,7 +502,7 @@ def solve_heat_transfer(domain, facet_tags, bc_ids, params, out_dir, u_h):
 
 # ── Cell 11: Dispatcher ────────────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 6: Run the simulation ───────────────────────────────────────────────
+"""# @title Cell 10 — Run Simulation (dispatcher — calls the right solver)
 print(f"Running: {sim_type}")
 print("=" * 55)
 
@@ -559,7 +559,7 @@ print("  Output files:", results.get("files", []))
 
 # ── Cell 12: Download results ─────────────────────────────────────────────────
 cells.append(code(
-"""# ── Step 7: Package results and download for ParaView ────────────────────────
+"""# @title Cell 11 — Download Results for ParaView
 from google.colab import files as colab_files
 
 zip_path = f"/content/{job['job_id']}_results.zip"
