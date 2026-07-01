@@ -1,13 +1,15 @@
 # Ignore everything except tracked project files
 /*
 !.gitignore
-
-# Microfluidic CFD simulation project
 !Research/
+
+# Adherence Analyzer project
 Research/*
-!Research/uF_Sim/
-Research/uF_Sim/*
-!Research/uF_Sim/README.md
-!Research/uF_Sim/uf_sim_ui.py
-!Research/uF_Sim/generate_notebook.py
-!Research/uF_Sim/microfluidic_cfd.ipynb
+!Research/G-force/
+Research/G-force/*
+!Research/G-force/Adherence_analysis/
+Research/G-force/Adherence_analysis/*
+!Research/G-force/Adherence_analysis/adherence_analyzer.py
+!Research/G-force/Adherence_analysis/README.md
+!Research/G-force/Adherence_analysis/requirements.txt
+!Research/G-force/Adherence_analysis/info.md
